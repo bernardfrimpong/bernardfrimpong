@@ -181,10 +181,10 @@ static void set_default_decoration_filter(struct decoration_filter *decoration_f
 	int i;
 	char *value = NULL;
 	struct string_list *include = decoration_filter->include_ref_pattern;
-	const struct string_list *config_exclude =
-			git_config_get_value_multi("log.excludeDecoration");
+	const struct string_list *config_exclude;
 
-	if (config_exclude) {
+	if (!git_config_get_string_multi("log.excludeDecoration",
+					 &config_exclude)) {
 		struct string_list_item *item;
 		for_each_string_list_item(item, config_exclude)
 			string_list_append(decoration_filter->exclude_ref_config_pattern,
@@ -581,6 +581,10 @@ static int git_log_config(const char *var, const char *value, void *cb)
 	}
 	if (!strcmp(var, "log.diffmerges"))
 		return diff_merges_config(value);
+	if (!strcmp(var, "log.diffmergeshide"))
+		return diff_merges_hide_config(git_config_bool(var, value));
+	if (!strcmp(var, "log.diffmerges-m-imply-p"))
+		return diff_merges_m_imply_p_config(git_config_bool(var, value));
 	if (!strcmp(var, "log.showroot")) {
 		default_show_root = git_config_bool(var, value);
 		return 0;
@@ -1871,6 +1875,7 @@ int cmd_format_patch(int argc, const char **argv, const char *prefix)
 	struct strbuf rdiff2 = STRBUF_INIT;
 	struct strbuf rdiff_title = STRBUF_INIT;
 	int creation_factor = -1;
+	int mboxrd = 0;
 
 	const struct option builtin_format_patch_options[] = {
 		OPT_CALLBACK_F('n', "numbered", &numbered, NULL,
@@ -1882,6 +1887,8 @@ int cmd_format_patch(int argc, const char **argv, const char *prefix)
 		OPT_BOOL('s', "signoff", &do_signoff, N_("add a Signed-off-by trailer")),
 		OPT_BOOL(0, "stdout", &use_stdout,
 			    N_("print patches to standard out")),
+		OPT_BOOL(0, "mboxrd", &mboxrd,
+			    N_("use the robust mboxrd format with --stdout")),
 		OPT_BOOL(0, "cover-letter", &cover_letter,
 			    N_("generate a cover letter")),
 		OPT_BOOL(0, "numbered-files", &just_numbers,
@@ -2104,6 +2111,10 @@ int cmd_format_patch(int argc, const char **argv, const char *prefix)
 	die_for_incompatible_opt3(use_stdout, "--stdout",
 				  rev.diffopt.close_file, "--output",
 				  !!output_directory, "--output-directory");
+
+	/* should we warn on --mboxrd w/o --stdout? */
+	if (mboxrd)
+		rev.commit_format = CMIT_FMT_MBOXRD;
 
 	if (use_stdout) {
 		setup_pager();

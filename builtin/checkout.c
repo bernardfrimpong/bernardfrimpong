@@ -232,7 +232,7 @@ static int checkout_stage(int stage, const struct cache_entry *ce, int pos,
 		pos++;
 	}
 	if (!overlay_mode) {
-		unlink_entry(ce);
+		unlink_entry(ce, NULL);
 		return 0;
 	}
 	if (stage == 2)
@@ -1224,7 +1224,7 @@ static const char *parse_remote_branch(const char *arg,
 		    advise(_("If you meant to check out a remote tracking branch on, e.g. 'origin',\n"
 			     "you can do so by fully qualifying the name with the --track option:\n"
 			     "\n"
-			     "    git checkout --track origin/<name>\n"
+			     "    git switch --track origin/<name>\n"
 			     "\n"
 			     "If you'd like to always have checkouts of an ambiguous <name> prefer\n"
 			     "one remote, e.g. the 'origin' remote, consider setting\n"

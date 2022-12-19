@@ -67,12 +67,19 @@ struct commit *lookup_commit_object(struct repository *r,
 
 }
 
-struct commit *lookup_commit(struct repository *r, const struct object_id *oid)
+struct commit *lookup_commit_type(struct repository *r,
+				  const struct object_id *oid,
+				  enum object_type type)
 {
 	struct object *obj = lookup_object(r, oid);
 	if (!obj)
 		return create_object(r, oid, alloc_commit_node(r));
-	return object_as_type(obj, OBJ_COMMIT, 0);
+	return object_as_type_hint(obj, OBJ_COMMIT, type);
+}
+
+struct commit *lookup_commit(struct repository *r, const struct object_id *oid)
+{
+	return lookup_commit_type(r, oid, OBJ_NONE);
 }
 
 struct commit *lookup_commit_reference_by_name(const char *name)
@@ -508,6 +515,17 @@ int repo_parse_commit_internal(struct repository *r,
 	enum object_type type;
 	void *buffer;
 	unsigned long size;
+	struct object_info oi = {
+		.typep = &type,
+		.sizep = &size,
+		.contentp = &buffer,
+	};
+	/*
+	 * Git does not support partial clones that exclude commits, so set
+	 * OBJECT_INFO_SKIP_FETCH_OBJECT to fail fast when an object is missing.
+	 */
+	int flags = OBJECT_INFO_LOOKUP_REPLACE | OBJECT_INFO_SKIP_FETCH_OBJECT |
+		OBJECT_INFO_DIE_IF_CORRUPT;
 	int ret;
 
 	if (!item)
@@ -516,8 +534,8 @@ int repo_parse_commit_internal(struct repository *r,
 		return 0;
 	if (use_commit_graph && parse_commit_in_graph(r, item))
 		return 0;
-	buffer = repo_read_object_file(r, &item->object.oid, &type, &size);
-	if (!buffer)
+
+	if (oid_object_info_extended(r, &item->object.oid, &oi, flags) < 0)
 		return quiet_on_missing ? -1 :
 			error("Could not read %s",
 			     oid_to_hex(&item->object.oid));
@@ -701,8 +719,10 @@ static void clear_commit_marks_1(struct commit_list **plist,
 		if (!parents)
 			return;
 
-		while ((parents = parents->next))
-			commit_list_insert(parents->item, plist);
+		while ((parents = parents->next)) {
+			if (parents->item->object.flags & mark)
+				commit_list_insert(parents->item, plist);
+		}
 
 		commit = commit->parents->item;
 	}
